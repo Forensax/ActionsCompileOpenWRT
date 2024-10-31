@@ -121,7 +121,6 @@ jobs:
     - name: 打包Bin目录
       run: |
         zip -q -r OpenWRT_Bin_v$(date +"%Y.%m.%d").zip openwrt/bin
-    # 
     - name: 生成发布标签
       id: tag
       run: |
@@ -145,7 +144,7 @@ jobs:
         🔒 密码: @Forensax " >> release.txt
 
     - name: 自动发布固件到 Releases
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.tag.outputs.release_tag }}
         body_path: release.txt
