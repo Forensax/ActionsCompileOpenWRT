@@ -2,7 +2,7 @@ name: Build OpenWrt x86-64
 on: 
   workflow_dispatch:
   schedule:
-    - cron: 0 3 * * *
+    - cron: 0 20 * * *
 env:
   TZ: Asia/Shanghai
 jobs:
@@ -118,9 +118,6 @@ jobs:
       with:
         name: OpenWrt Bin
         path: openwrt/bin
-    - name: 打包Bin目录
-      run: |
-        zip -q -r OpenWRT_Bin_v$(date +"%Y.%m.%d").zip openwrt/bin
     - name: 生成发布标签
       id: tag
       run: |
@@ -152,4 +149,3 @@ jobs:
           openwrt/bin/targets/x86/64/*.*
           openwrt/bin/packages/x86_64/base/*passwall*
           openwrt/bin/packages/x86_64/base/*ssr-plus*
-          OpenWRT_Bin*.zip
