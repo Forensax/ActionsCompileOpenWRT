@@ -118,6 +118,57 @@ jobs:
       run: |
         cd openwrt
         make -j$(nproc) || make -j1 || make -j1 V=s
+
+    - name: 生成QCOW2镜像
+      run: |
+        # 确保目录存在
+        cd openwrt/bin
+
+        # 遍历并处理文件
+        find . -type f \( -name "*.vmdk.gz" -o -name "*.vmdk" \) | while read -r FILE; do
+            if [[ $FILE == *.vmdk.gz ]]; then
+                # 解压 .vmdk.gz 文件到临时目录
+                echo "解压文件: $FILE"
+                TEMP_DIR=$(mktemp -d)
+                cp "$FILE" "$TEMP_DIR/"
+                gunzip "$TEMP_DIR/$(basename "$FILE")"
+                VMDK_FILE="$TEMP_DIR/$(basename "${FILE%.gz}")"
+
+                # 转换为 .qcow2 文件
+                QCOW2_FILE="${FILE%.vmdk.gz}.qcow2"
+                echo "转换 $VMDK_FILE 为 $QCOW2_FILE"
+                qemu-img convert -f vmdk -O qcow2 "$VMDK_FILE" "$QCOW2_FILE"
+
+                # 压缩 .qcow2 文件为 .qcow2.gz
+                echo "压缩 $QCOW2_FILE 为 ${QCOW2_FILE}.gz"
+                gzip "$QCOW2_FILE"
+
+                # 删除临时解压的 .vmdk 文件
+                echo "清理临时文件"
+                rm -f "$VMDK_FILE"
+                rmdir "$TEMP_DIR"
+
+                # 计算生成的 .qcow2.gz 文件的 SHA256 值
+                FINAL_FILE="${QCOW2_FILE}.gz"
+            else
+                # 文件是 .vmdk，直接转换为 .qcow2
+                QCOW2_FILE="${FILE%.vmdk}.qcow2"
+                echo "转换 $FILE 为 $QCOW2_FILE"
+                qemu-img convert -f vmdk -O qcow2 "$FILE" "$QCOW2_FILE"
+
+                # 计算生成的 .qcow2 文件的 SHA256 值
+                FINAL_FILE="$QCOW2_FILE"
+            fi
+
+            # 追加 SHA256 值到 sha256sums 文件
+            echo "计算 $FINAL_FILE 的 SHA256 值并更新到 sha256sums"
+            sha256sum "$FINAL_FILE" >> ./targets/x86/64/sha256sums
+        done
+
+        echo "所有操作完成！"
+        ls -la ./targets/x86/64/
+        cat ./targets/x86/64/sha256sums
+        
     - name : 上传固件
       uses: actions/upload-artifact@v4
       with:
@@ -140,11 +191,14 @@ jobs:
         path: openwrt/bin
     - name: 打包Bin目录
       run: |
-        zip -q -r OpenWRT_Bin_v$(date +"%Y.%m.%d").zip openwrt/bin
-        echo "MD5 checksum:"
-        md5sum OpenWRT_Bin_v$(date +"%Y.%m.%d").zip
-        echo "SHA256 checksum:"
-        sha256sum OpenWRT_Bin_v$(date +"%Y.%m.%d").zip
+        zip -q -s 2000m -r OpenWRT_Bin_v$(date +"%Y.%m.%d").zip openwrt/bin
+        for file in OpenWRT_Bin_v$(date +"%Y.%m.%d").*; do
+            echo "File: $file"
+            echo "Size: $(du -h "$file" | cut -f1)"  # 输出文件大小
+            echo "MD5 checksum: $(md5sum "$file" | awk '{print $1}')"  # 计算MD5
+            echo "SHA256 checksum: $(sha256sum "$file" | awk '{print $1}')"  # 计算SHA256
+            echo "-------------------------"
+        done
     - name: 生成发布标签
       id: tag
       run: |
@@ -174,4 +228,4 @@ jobs:
           openwrt/bin/targets/x86/64/*
           openwrt/bin/packages/x86_64/base/*passwall*
           openwrt/bin/packages/x86_64/base/*ssr-plus*
-          OpenWRT_Bin*.zip
+          OpenWRT_Bin*.*
